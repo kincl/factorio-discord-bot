@@ -28,18 +28,34 @@ func init() {
 	flag.Parse()
 }
 
-func logTail(c chan *tail.Line, s *discordgo.Session, ChannelID string) {
-	for {
-		line := <-c
-		if line.Err != nil {
-			fmt.Println("err in line: ", line.Err)
-			continue
-		}
-		// fmt.Println("line: ", line.Text)
+func parseLogLine(line *tail.Line) (string, error) {
+	if line.Err != nil {
+		fmt.Println("err in line: ", line.Err)
+		return "", line.Err
+	}
+	// fmt.Println("line: ", line.Text)
 
-		if strings.Contains(line.Text, "[CHAT]") {
-			factorioChatMessage := strings.Split(line.Text, "[CHAT]")[1]
-			s.ChannelMessageSend(ChannelID, "[Factorio]"+factorioChatMessage)
+	if strings.Contains(line.Text, "[CHAT]") {
+		factorioChatMessage := strings.Split(line.Text, "[CHAT]")[1]
+		return factorioChatMessage, nil
+	}
+	return "", nil
+}
+
+func logTail(tailing <-chan interface{}, c chan *tail.Line, s *discordgo.Session, ChannelID string) {
+	for {
+		select {
+		case <-tailing:
+			return
+
+		case line := <-c:
+			chatLine, err := parseLogLine(line)
+			if err != nil {
+				continue
+			}
+			if chatLine != "" {
+				s.ChannelMessageSend(ChannelID, "[Factorio]"+chatLine)
+			}
 		}
 	}
 }
@@ -74,14 +90,23 @@ func main() {
 		}
 	}
 
-	t, err := tail.TailFile(Logfile, tail.Config{Follow: true})
-	go logTail(t.Lines, dg, talkChannel.ID)
+	tailing := make(chan interface{})
+
+	t, err := tail.TailFile(Logfile, tail.Config{Follow: true, Location: &tail.SeekInfo{Offset: 0}})
+	go logTail(tailing, t.Lines, dg, talkChannel.ID)
 
 	// Wait here until CTRL-C or other term signal is received.
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
+
+	close(tailing)
+
+	// cleanly exit from tail
+	log.Println(t.Tell())
+	t.Stop()
+	t.Cleanup()
 
 	// Cleanly close down the Discord session.
 	dg.Close()
