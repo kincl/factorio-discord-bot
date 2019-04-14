@@ -1,9 +1,9 @@
-# factorio-discord-bot
+# factorio-discord-gateway
 
 ## Building for linux
 
 ```
-GOOS=linux GOARCH=amd64 go build -o factorio-discord-bot . 
+GOOS=linux GOARCH=amd64 go build -o factorio-discord-gateway . 
 ```
 
 ## Getting guildID
@@ -23,3 +23,4 @@ application's bot user for your guild.
 
 * https://discordapp.com/developers/applications/
 * https://github.com/jagrosh/MusicBot/wiki/Adding-Your-Bot-To-Your-Server
+
